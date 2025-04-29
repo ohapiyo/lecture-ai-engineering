@@ -10,9 +10,15 @@ from metrics import get_metrics_descriptions
 # --- チャットページのUI ---
 def display_chat_page(pipe):
     """チャットページのUIを表示する"""
-    st.subheader("質問を入力してください")
+    cuisine_type = st.radio("料理の種類を選択してください", ["和食", "中華", "洋食"]) 
+    level_type = st.radio("料理の難易度を選択してください", ["初級", "中級", "上級"]) 
+    kondate_type = st.radio("献立を選択してください",["メイン", "副菜", "汁物"])
+    
+    st.subheader("冷蔵庫内の食材を入力してください")
     user_question = st.text_area("質問", key="question_input", height=100, value=st.session_state.get("current_question", ""))
     submit_button = st.button("質問を送信")
+    delete_button = st.button("質問を削除する")   
+
 
     # セッション状態の初期化（安全のため）
     if "current_question" not in st.session_state:
@@ -24,9 +30,19 @@ def display_chat_page(pipe):
     if "feedback_given" not in st.session_state:
         st.session_state.feedback_given = False
 
+    if delete_button:
+      user_question = ""
+      st.session_state["current_question"] = user_question  # session_state も更新
+      st.rerun()  # 画面を再描画
+
     # 質問が送信された場合
     if submit_button and user_question:
-        st.session_state.current_question = user_question
+        question_text = f"{user_question} を使用したレシピを教えてください。\n" \
+                      f"ジャンルは {cuisine_type} です。\n" \
+                      f"レシピの難易度は {level_type} です。\n" \
+                      f"献立は {kondate_type} です。"
+
+        st.session_state.current_question = question_text
         st.session_state.current_answer = "" # 回答をリセット
         st.session_state.feedback_given = False # フィードバック状態もリセット
 
