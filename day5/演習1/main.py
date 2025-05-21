@@ -1,3 +1,4 @@
+
 import os
 import mlflow
 import mlflow.sklearn
@@ -10,34 +11,28 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score
 from sklearn.preprocessing import LabelEncoder
 from mlflow.models.signature import infer_signature
-
-
+import time
 # データ準備
 def prepare_data(test_size=0.2, random_state=42):
     # Titanicデータセットの読み込み
     path = "data/Titanic.csv"
     data = pd.read_csv(path)
-
     # 必要な特徴量の選択と前処理
     data = data[["Pclass", "Sex", "Age", "Fare", "Survived"]].dropna()
     data["Sex"] = LabelEncoder().fit_transform(data["Sex"])  # 性別を数値に変換
-
     # 整数型の列を浮動小数点型に変換
     data["Pclass"] = data["Pclass"].astype(float)
     data["Sex"] = data["Sex"].astype(float)
     data["Age"] = data["Age"].astype(float)
     data["Fare"] = data["Fare"].astype(float)
     data["Survived"] = data["Survived"].astype(float)
-
     X = data[["Pclass", "Sex", "Age", "Fare"]]
     y = data["Survived"]
-
     # データ分割
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=test_size, random_state=random_state
     )
     return X_train, X_test, y_train, y_test
-
 
 # 学習と評価
 def train_and_evaluate(
@@ -51,20 +46,18 @@ def train_and_evaluate(
     accuracy = accuracy_score(y_test, predictions)
     return model, accuracy
 
-
 # モデル保存
-def log_model(model, accuracy, params):
+def log_model(model, accuracy, params, inference_time_ms, X_train, X_test):
     with mlflow.start_run():
         # パラメータをログ
         for param_name, param_value in params.items():
             mlflow.log_param(param_name, param_value)
-
         # メトリクスをログ
         mlflow.log_metric("accuracy", accuracy)
-
+        mlflow.log_metric("inference_time_ms", inference_time_ms)
         # モデルのシグネチャを推論
+        #signature = infer_signature(X_train, model.predict(X_train))
         signature = infer_signature(X_train, model.predict(X_train))
-
         # モデルを保存
         mlflow.sklearn.log_model(
             model,
@@ -73,9 +66,11 @@ def log_model(model, accuracy, params):
             input_example=X_test.iloc[:5],  # 入力例を指定
         )
         # accurecyとparmsは改行して表示
-        print(f"モデルのログ記録値 \naccuracy: {accuracy}\nparams: {params}")
-
-
+        #print(f"モデルのログ記録値 \naccuracy: {accuracy}\nparams: {params}")
+        print(f"モデルのログ記録値:")
+        print(f" accuracy: {accuracy:.4f}")
+        print(f" inference_time_ms: {inference_time_ms:.2f} ms")
+        print(f" params: {params}")
 # メイン処理
 if __name__ == "__main__":
     # ランダム要素の設定
@@ -86,7 +81,6 @@ if __name__ == "__main__":
     model_random_state = random.randint(1, 100)
     n_estimators = random.randint(50, 200)
     max_depth = random.choice([None, 3, 5, 10, 15])
-
     # パラメータ辞書の作成
     params = {
         "test_size": test_size,
@@ -95,12 +89,10 @@ if __name__ == "__main__":
         "n_estimators": n_estimators,
         "max_depth": "None" if max_depth is None else max_depth,
     }
-
     # データ準備
     X_train, X_test, y_train, y_test = prepare_data(
         test_size=test_size, random_state=data_random_state
     )
-
     # 学習と評価
     model, accuracy = train_and_evaluate(
         X_train,
@@ -111,10 +103,17 @@ if __name__ == "__main__":
         max_depth=max_depth,
         random_state=model_random_state,
     )
-
+    print("\n--- モデルの推論テストを開始 ---")
+    # 推論時間の計測
+    start_time = time.time()
+    _ = model.predict(X_test) # 予測結果はaccuracy計算時に使われているので、ここでは捨てる
+    end_time = time.time()
+    inference_time_ms = (end_time - start_time) * 1000 # ミリ秒に変換
+    print(f"推論時間: {inference_time_ms:.2f} ms (テストデータ {len(X_test)} 件)")
+    print(f"テストデータに対する推論精度: {accuracy:.4f}") # accuracyはy_testに対する推論精度
+    
     # モデル保存
-    log_model(model, accuracy, params)
-
+    log_model(model, accuracy, params, inference_time_ms, X_train, X_test)
     model_dir = "models"
     os.makedirs(model_dir, exist_ok=True)
     model_path = os.path.join(model_dir, f"titanic_model.pkl")
